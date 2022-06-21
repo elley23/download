@@ -7,6 +7,7 @@ package cmd
 import (
 	"download/client"
 	"fmt"
+	"github.com/spf13/viper"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -14,6 +15,9 @@ import (
 
 var url string
 var dir string
+var goroutines int
+var rangeSize int64
+var chanLen int64
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
@@ -23,12 +27,18 @@ var rootCmd = &cobra.Command{
 	// Uncomment the following line if your bare application
 	// has an action associated with it:
 	Run: func(cmd *cobra.Command, args []string) {
+
 		if len(url) == 0 {
 			fmt.Println("Please input the url...")
 			cmd.Help()
 			return
 		}
 
+		//viper.GetString()
+
+		client.RangeSize = rangeSize
+		client.ChanCnt = chanLen
+		client.Goroutines = goroutines
 		err := client.DownloadFileGo(url, dir)
 		if err != nil {
 			cmd.Help()
@@ -46,16 +56,45 @@ func Execute() {
 	}
 }
 
+var cfgFile string
+
 func init() {
+
+	cobra.OnInitialize(initConfig)
 	// Here you will define your flags and configuration settings.
 	// Cobra supports persistent flags, which, if defined here,
 	// will be global for your application.
 
 	// rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.xpower.yaml)")
+	rootCmd.PersistentFlags().StringVarP(&cfgFile, "config", "c", "", "config file (default is ./conf/config.ini)")
 
 	// Cobra also supports local flags, which will only run
 	// when this action is called directly.
 	//rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 	rootCmd.Flags().StringVarP(&url, "url", "u", "", "url (Mandatory)")
 	rootCmd.Flags().StringVarP(&dir, "dir", "d", "", "Destination file's directory")
+
+}
+
+func initConfig() {
+	
+	if cfgFile != "" {
+		viper.SetConfigFile(cfgFile)
+	} else {
+
+		viper.AddConfigPath("./conf")
+		viper.SetConfigName("config")
+		viper.SetConfigType("ini")
+	}
+
+	//viper.AutomaticEnv()
+
+	err := viper.ReadInConfig()
+	if err == nil {
+		fmt.Println("Using config file:", viper.ConfigFileUsed())
+	}
+
+	goroutines = viper.GetInt("default.goroutines")
+	rangeSize = viper.GetInt64("default.range_size")
+	chanLen = viper.GetInt64("default.channel_length")
 }

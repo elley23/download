@@ -19,7 +19,7 @@ import (
 
 //做个http client从固定的网站下载文件，支持断点续传，下载的文件保存在当前目录
 //cross over: 339.32M
-var durl = "http://downza.91speed.vip/2022/04/21/crossover.zip"
+//var durl = "http://downza.91speed.vip/2022/04/21/crossover.zip"
 
 //4.4G
 //var durl = "http://officecdn.microsoft.com/pr/492350f6-3a01-4f97-b9c0-c7c6ddf67d60/media/zh-cn/ProPlus2019Retail.img"
@@ -155,17 +155,28 @@ type Range struct {
 }
 
 var chanRange chan Range
-var eachRangeLen int64 = 1024 * 1024 * 10 //10M
+
+//var eachRangeLen int64
+var RangeSize int64
+var Goroutines int
+var ChanCnt int64
 
 func downloadFileGoroutine(filename string, size int64, url string) {
 	ntStart := time.Now()
 
-	// 1.初始化管道
-	if size > 1000000000 {
-		eachRangeLen = 1024 * 1024 * 20 //20M
+	if RangeSize == 0 {
+		RangeSize = 1024 * 1024 * 10 //10M
 	}
-	count := getChannCnt(size)
-	chanRange = make(chan Range, count)
+
+	if Goroutines == 0 {
+		Goroutines = 10
+	}
+	if ChanCnt == 0 {
+		ChanCnt = 100
+	}
+
+	// 1.初始化管道
+	chanRange = make(chan Range, ChanCnt)
 
 	//启动多个协程下载文件
 	var rwLock sync.RWMutex
@@ -173,12 +184,12 @@ func downloadFileGoroutine(filename string, size int64, url string) {
 	//判断是否已经存在描述文件，是否是最初的下载
 	file, err := os.Open(filename + "_tmp.txt")
 	if err != nil { //没有描述文件，最开始的下载
-		for i := 0; i < int(count/4); i++ {
+		for i := 0; i < Goroutines; i++ {
 			wg.Add(1)
 			go DownloadFileRange(&rwLock, url, filename, size)
 
 		}
-		fmt.Printf("共启动%d个协程...\n", int(count/4))
+		fmt.Printf("共启动%d个协程...\n", Goroutines)
 
 		//把range切片,放进channel
 		SliceSizeToRange(0, size)
@@ -199,13 +210,10 @@ func downloadFileGoroutine(filename string, size int64, url string) {
 		if info.Size() >= size { //文件大小已经下载完毕
 			break
 		}
-		tmpSize := size - info.Size()
 		file.Close()
 
-		count := getChannCnt(tmpSize)
-
-		chanRange = make(chan Range, count)
-		for i := 0; i < int(count/4); i++ {
+		chanRange = make(chan Range, ChanCnt)
+		for i := 0; i < Goroutines; i++ {
 			wg.Add(1)
 			go DownloadFileRange(&rwLock, url, filename, size)
 		}
@@ -341,7 +349,7 @@ func SliceSizeToRange(rangeStart int64, rangeEnd int64) {
 			break
 		}
 
-		end = start + eachRangeLen - 1
+		end = start + RangeSize - 1
 		if end > rangeEnd {
 			end = rangeEnd
 		}
@@ -411,16 +419,4 @@ func SliceTheUndlRanges(filename string, filesize int64) {
 		SliceSizeToRange(v+1, filesize)
 	}
 	return
-}
-
-func getChannCnt(size int64) (count int64) {
-	count = size / eachRangeLen
-	if count > 1000 {
-		count = 1000
-	}
-	if count < 50 {
-		count = 50
-	}
-	return count
-
 }
