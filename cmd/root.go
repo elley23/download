@@ -77,14 +77,11 @@ func init() {
 }
 
 func initConfig() {
-	
+
 	if cfgFile != "" {
 		viper.SetConfigFile(cfgFile)
 	} else {
-
-		viper.AddConfigPath("./conf")
-		viper.SetConfigName("config")
-		viper.SetConfigType("ini")
+		viper.SetConfigFile("./conf/config.ini")
 	}
 
 	//viper.AutomaticEnv()
